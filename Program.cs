@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Npgsql;
 
 class Program
@@ -131,7 +131,7 @@ class Program
         {
             cmd.Connection = conn;
             cmd.CommandText = @"
-            SELECT d.*
+            SELECT d.*, s.price
             FROM Drug d
             JOIN Sale s ON d.drug_trade_name = s.drug_trade_name
             WHERE s.pharmacy_name = @pharmacy_name";
@@ -140,12 +140,12 @@ class Program
             using (var reader = cmd.ExecuteReader())
             {
                 Console.WriteLine("--------------------------------------------------------------------------------------------");
-                Console.WriteLine("| Drug Trade Name | Formula | Pharmaceutical Company | Price | Quantity | Expiry Date |");
+                Console.WriteLine("| Drug Trade Name | Formula | Pharmaceutical Company | Price | Quantity |");
                 Console.WriteLine("--------------------------------------------------------------------------------------------");
 
                 while (reader.Read())
                 {
-                    Console.WriteLine($"| {reader["drug_trade_name"],-16} | {reader["formula"],-7} | {reader["Pharmaceutical_company_name"],-23} | {reader["price"],-6} | {reader["quantity"],-8} | {reader["expiry_date"],-12} |");
+                    Console.WriteLine($"| {reader["drug_trade_name"],-16} | {reader["formula"],-7} | {reader["Pharmaceutical_company_name"],-23} | {reader["price"],-6} |");
                 }
 
                 Console.WriteLine("--------------------------------------------------------------------------------------------");
@@ -168,12 +168,12 @@ class Program
             using (var reader = cmd.ExecuteReader())
             {
                 Console.WriteLine("--------------------------------------------------------------------------------------------");
-                Console.WriteLine("| Drug Trade Name | Formula | Price | Quantity | Expiry Date |");
+                Console.WriteLine("| Drug Trade Name | Formula");
                 Console.WriteLine("--------------------------------------------------------------------------------------------");
 
                 while (reader.Read())
                 {
-                    Console.WriteLine($"| {reader["drug_trade_name"],-16} | {reader["formula"],-7} | {reader["price"],-6} | {reader["quantity"],-8} | {reader["expiry_date"],-12} |");
+                    Console.WriteLine($"| {reader["drug_trade_name"],-16} | {reader["formula"],-7} |");
                 }
 
                 Console.WriteLine("--------------------------------------------------------------------------------------------");
@@ -351,9 +351,9 @@ class Program
 
             // Fetch the data of the records to be deleted before deletion
             cmd.CommandText = @"
-            SELECT *
-            FROM Pharmaceutical_company
-            WHERE Pharmaceutical_company_name = @companyToDelete";
+        SELECT *
+        FROM Pharmaceutical_company
+        WHERE Pharmaceutical_company_name = @companyToDelete";
 
             cmd.Parameters.AddWithValue("companyToDelete", companyToDelete);
 
@@ -365,19 +365,25 @@ class Program
 
                 while (reader.Read())
                 {
-                    Console.WriteLine($"| {reader["Pharmaceutical_company_name"],-24} | {reader["phone"],-37} |");
+                    Console.WriteLine($"| {reader["Pharmaceutical_company_name"],-24} | {reader["phone_number"],-37} |");
                 }
 
                 Console.WriteLine("------------------------------------------------------------------");
             }
 
-            // Delete the pharmaceutical company and its associated drugs
+            // Delete associated prescription records first
             cmd.CommandText = @"
-            DELETE FROM Pharmaceutical_company
-            WHERE Pharmaceutical_company_name = @companyToDelete;
-            
-            DELETE FROM Drug
-            WHERE Pharmaceutical_company_name = @companyToDelete";
+        DELETE FROM Contract
+        WHERE Pharmaceutical_company_name = @companyToDelete;
+        DELETE FROM Sale
+        WHERE drug_trade_name IN (SELECT drug_trade_name FROM Drug WHERE Pharmaceutical_company_name = @companyToDelete);
+
+        DELETE FROM Prescription
+        WHERE drug_trade_name IN (SELECT drug_trade_name FROM Drug WHERE Pharmaceutical_company_name = @companyToDelete);
+
+        -- Now delete the pharmaceutical company
+        DELETE FROM Pharmaceutical_company
+        WHERE Pharmaceutical_company_name = @companyToDelete";
 
             cmd.ExecuteNonQuery();
 
@@ -386,63 +392,73 @@ class Program
     }
 
 
-    static void Query10(string pharmacyNameToUpdate, string newAddress, NpgsqlConnection conn)
+
+    public static void Query10(string pharmacyNameToUpdate, string address, NpgsqlConnection conn)
     {
-        using (var cmd = new NpgsqlCommand())
+        try
         {
-            cmd.Connection = conn;
+            using (var cmd = new NpgsqlCommand())
+            {
+                cmd.Connection = conn;
 
-            // Fetch the data of the record before update
-            cmd.CommandText = @"
+                // Fetch the data of the record before update
+                cmd.CommandText = @"
             SELECT *
             FROM Pharmacy
             WHERE pharmacy_name = @pharmacyNameToUpdate";
 
-            cmd.Parameters.AddWithValue("pharmacyNameToUpdate", pharmacyNameToUpdate);
+                cmd.Parameters.AddWithValue("pharmacyNameToUpdate", pharmacyNameToUpdate);
 
-            using (var reader = cmd.ExecuteReader())
-            {
-                Console.WriteLine("--------------------------------------------------");
-                Console.WriteLine("| Pharmacy Name     | Address         | Phone Number     |");
-                Console.WriteLine("--------------------------------------------------");
-
-                while (reader.Read())
+                using (var reader = cmd.ExecuteReader())
                 {
-                    Console.WriteLine($"| {reader["pharmacy_name"],-18} | {reader["address"],-15} | {reader["phone_number"],-16} |");
+                    Console.WriteLine("--------------------------------------------------");
+                    Console.WriteLine("| Pharmacy Name     | Address         | Phone Number     |");
+                    Console.WriteLine("--------------------------------------------------");
+
+                    while (reader.Read())
+                    {
+                        Console.WriteLine($"| {reader["pharmacy_name"],-18} | {reader["address"],-15} | {reader["phone"],-16} |");
+                    }
+
+                    Console.WriteLine("--------------------------------------------------");
                 }
 
-                Console.WriteLine("--------------------------------------------------");
-            }
-
-            // Perform the update
-            cmd.CommandText = @"
+                // Perform the update
+                cmd.CommandText = @"
             UPDATE Pharmacy
-            SET address = @newAddress
+            SET address = @address
             WHERE pharmacy_name = @pharmacyNameToUpdate";
 
-            cmd.ExecuteNonQuery();
+                cmd.Parameters.AddWithValue("address", address);
 
-            // Fetch the data of the record after update
-            cmd.CommandText = @"
+                cmd.ExecuteNonQuery();
+
+                // Fetch the data of the record after update
+                cmd.CommandText = @"
             SELECT *
             FROM Pharmacy
             WHERE pharmacy_name = @pharmacyNameToUpdate";
 
-            using (var reader = cmd.ExecuteReader())
-            {
-                Console.WriteLine("--------------------------------------------------");
-                Console.WriteLine("| Pharmacy Name     | Address         | Phone Number     |");
-                Console.WriteLine("--------------------------------------------------");
-
-                while (reader.Read())
+                using (var reader = cmd.ExecuteReader())
                 {
-                    Console.WriteLine($"| {reader["pharmacy_name"],-18} | {reader["address"],-15} | {reader["phone_number"],-16} |");
+                    Console.WriteLine("--------------------------------------------------");
+                    Console.WriteLine("| Pharmacy Name     | Address         | Phone Number     |");
+                    Console.WriteLine("--------------------------------------------------");
+
+                    while (reader.Read())
+                    {
+                        Console.WriteLine($"| {reader["pharmacy_name"],-18} | {reader["address"],-15} | {reader["phone"],-16} |");
+                    }
+
+                    Console.WriteLine("--------------------------------------------------");
                 }
 
-                Console.WriteLine("--------------------------------------------------");
+                Console.WriteLine("Pharmacy address updated successfully.");
             }
-
-            Console.WriteLine("Pharmacy address updated successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An error occurred: {ex.Message}");
         }
     }
 
